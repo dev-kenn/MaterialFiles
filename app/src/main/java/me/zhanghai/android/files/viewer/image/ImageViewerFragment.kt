@@ -55,6 +55,8 @@ class ImageViewerFragment : Fragment(), ConfirmDeleteDialogFragment.Listener {
 
     private lateinit var systemUiHelper: SystemUiHelper
 
+    private var isAppBarVisible = true
+
     private lateinit var adapter: ImageViewerAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,16 +94,15 @@ class ImageViewerFragment : Fragment(), ConfirmDeleteDialogFragment.Listener {
         systemUiHelper = SystemUiHelper(
             activity, SystemUiHelper.LEVEL_IMMERSIVE, SystemUiHelper.FLAG_IMMERSIVE_STICKY
         ) { visible: Boolean ->
-            binding.appBarLayout.animate()
-                .alpha(if (visible) 1f else 0f)
-                .translationY(if (visible) 0f else -binding.appBarLayout.bottom.toFloat())
-                .setDuration(mediumAnimTime.toLong())
-                .setInterpolator(FastOutSlowInInterpolator())
-                .start()
+            // The system bars stay visible in multi-window mode, so the callback would
+            // immediately undo our own hiding.
+            if (!activity.isInMultiWindowMode) {
+                setAppBarVisible(visible)
+            }
         }
         // This will set up window flags.
         systemUiHelper.show()
-        adapter = ImageViewerAdapter(viewLifecycleOwner) { systemUiHelper.toggle() }.apply {
+        adapter = ImageViewerAdapter(viewLifecycleOwner) { toggleSystemUi() }.apply {
             replace(paths)
         }
         binding.viewPager.apply {
@@ -117,6 +118,31 @@ class ImageViewerFragment : Fragment(), ConfirmDeleteDialogFragment.Listener {
                 }
             })
         }
+    }
+
+    private fun toggleSystemUi() {
+        // Don't rely solely on the system UI visibility callback, which may not fire on newer
+        // Android versions.
+        val visible = !isAppBarVisible
+        if (visible) {
+            systemUiHelper.show()
+        } else {
+            systemUiHelper.hide()
+        }
+        setAppBarVisible(visible)
+    }
+
+    private fun setAppBarVisible(visible: Boolean) {
+        if (isAppBarVisible == visible && binding.appBarLayout.alpha == (if (visible) 1f else 0f)) {
+            return
+        }
+        isAppBarVisible = visible
+        binding.appBarLayout.animate()
+            .alpha(if (visible) 1f else 0f)
+            .translationY(if (visible) 0f else -binding.appBarLayout.bottom.toFloat())
+            .setDuration(mediumAnimTime.toLong())
+            .setInterpolator(FastOutSlowInInterpolator())
+            .start()
     }
 
     override fun onViewStateRestored(savedInstanceState: Bundle?) {
